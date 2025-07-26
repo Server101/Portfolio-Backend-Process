@@ -1,12 +1,21 @@
-module.exports = async function analyzeThreat(url) {
-  // Simulated analysis logic
+function analyzeThreat(url) {
+  const threats = [];
+
+  if (url.includes('suspicious')) {
+    threats.push('Suspicious domain keyword detected');
+  }
+
+  if (url.includes('phish')) {
+    threats.push('Phishing indicators found');
+  }
+
+  const score = threats.length * 30;
+
   return {
-    url,
-    threatLevel: 'Moderate',
-    issues: [
-      'Outdated SSL Certificate',
-      'Suspicious JavaScript redirect',
-      'No Content Security Policy header',
-    ],
+    score,
+    flags: threats,
+    timestamp: new Date(),
   };
-};
+}
+
+module.exports = analyzeThreat;
