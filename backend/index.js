@@ -20,5 +20,5 @@ app.get('/api/projects', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
+  console.log(`Backend running at http://3.142.144.88/:${PORT}`);
 });
