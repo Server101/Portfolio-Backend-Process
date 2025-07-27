@@ -11,6 +11,10 @@ app.use(express.json());
 // ✅ Mount correct router
 app.use('/api/threat', threatRoutes);
 
+app.get('/', (req, res) => {
+  res.send('API is running ✅');
+});
+
 // Optional test route
 app.get('/api/projects', (req, res) => {
   res.json([
