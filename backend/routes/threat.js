@@ -6,6 +6,7 @@ const pool = require('../db');
 
 // POST /api/threat/analyze
 router.post('/analyze', async (req, res) => {
+    console.log('Received body:', req.body);
   const { websiteUrl } = req.body;
   const result = analyzeThreat(websiteUrl);
 
