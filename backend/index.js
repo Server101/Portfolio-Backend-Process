@@ -3,11 +3,11 @@ const cors = require('cors');
 const app = express();
 const PORT = 3001;
 
-const threatRoutes = require('./routes/threat'); //  correct import
-
 app.use(cors());
 app.use(express.json());
 
+
+const threatRoutes = require('./routes/threat'); //  correct import
 // ✅ Mount correct router
 app.use('/api/threat', threatRoutes);
 
