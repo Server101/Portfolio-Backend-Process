@@ -3,7 +3,7 @@ const cors = require('cors');
 const app = express();
 const PORT = 3001;
 
-
+const threatRoutes = require('./routes/threat');
 const threatRoute = require('./routes/threatRoute');
 app.use('/api/threat', threatRoute);
 

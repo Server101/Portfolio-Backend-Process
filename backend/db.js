@@ -3,10 +3,10 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  user: 'your_username',        // e.g., 'postgres'
-  host: 'localhost',            // or use your cloud DB host
-  database: 'your_db_name',     // your PostgreSQL DB name
-  password: 'your_password',
+  user: 'portfolio_user',        // e.g., 'postgres'
+  host: '3.142.144.88',            // or use your cloud DB host
+  database: 'yportfolio_db',     // your PostgreSQL DB name
+  password: '5g4yu5i4ytud56i',
   port: 5432,
 });
 
