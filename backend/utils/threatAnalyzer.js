@@ -1,4 +1,5 @@
 // backend/utils/threatAnalyzer.js
+require('dotenv').config(); // Load .env variables
 const axios = require('axios');
 
 const ABUSEIPDB_KEY = process.env.ABUSEIPDB_KEY;
@@ -8,7 +9,7 @@ async function analyzeThreat(websiteUrl) {
   const threats = [];
   let score = 0;
 
-  // Local keyword checks
+  // Local pattern checks
   if (websiteUrl.includes('malware')) {
     threats.push('Malicious keyword detected');
     score += 30;
@@ -18,14 +19,27 @@ async function analyzeThreat(websiteUrl) {
     score += 30;
   }
 
-  // Extract domain or IP from URL
-  const urlObj = new URL(websiteUrl);
-  const hostname = urlObj.hostname;
+  // Extract hostname or IP
+  let hostname;
+  try {
+    const urlObj = new URL(websiteUrl.startsWith('http') ? websiteUrl : `http://${websiteUrl}`);
+    hostname = urlObj.hostname;
+  } catch (err) {
+    threats.push('Invalid URL format');
+    return {
+      websiteUrl,
+      threatLevel: 'Low',
+      description: 'Invalid URL format',
+      score,
+      flags: threats,
+      timestamp: new Date(),
+    };
+  }
 
-  // AbuseIPDB Check (only works on IPs, not domains)
+  // AbuseIPDB (only for IPs)
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
     try {
-      const abuseRes = await axios.get(`https://api.abuseipdb.com/api/v2/check`, {
+      const abuseRes = await axios.get('https://api.abuseipdb.com/api/v2/check', {
         params: { ipAddress: hostname, maxAgeInDays: 90 },
         headers: {
           Key: ABUSEIPDB_KEY,
@@ -34,41 +48,40 @@ async function analyzeThreat(websiteUrl) {
       });
 
       const abuseData = abuseRes.data.data;
-      if (abuseData.abuseConfidenceScore > 25) {
-        threats.push(`AbuseIPDB: Confidence ${abuseData.abuseConfidenceScore}%`);
-        score += abuseData.abuseConfidenceScore / 2; // scale down weight
+      if (abuseData.abuseConfidenceScore > 20) {
+        threats.push(`AbuseIPDB: ${abuseData.abuseConfidenceScore}% confidence`);
+        score += abuseData.abuseConfidenceScore / 2;
       }
     } catch (err) {
       console.error('AbuseIPDB Error:', err.message);
     }
   }
 
-  // VirusTotal URL Scan
+  // VirusTotal (URLs must be base64url-encoded)
   try {
-    const vtRes = await axios.get(`https://www.virustotal.com/api/v3/urls/${Buffer.from(websiteUrl).toString('base64').replace(/=+$/, '')}`, {
+    const encodedUrl = Buffer.from(websiteUrl).toString('base64url');
+    const vtRes = await axios.get(`https://www.virustotal.com/api/v3/urls/${encodedUrl}`, {
       headers: { 'x-apikey': VIRUSTOTAL_KEY },
     });
 
-    const positives = vtRes.data.data.attributes.last_analysis_stats.malicious;
-    if (positives > 0) {
-      threats.push(`VirusTotal: ${positives} engines flagged`);
-      score += positives * 10;
+    const stats = vtRes.data.data.attributes.last_analysis_stats;
+    if (stats.malicious > 0) {
+      threats.push(`VirusTotal: flagged by ${stats.malicious} engines`);
+      score += stats.malicious * 10;
     }
   } catch (err) {
     console.error('VirusTotal Error:', err.message);
   }
 
-  // Determine threat level
+  // Final assessment
   let threatLevel = 'Low';
   if (score >= 60) threatLevel = 'High';
   else if (score >= 30) threatLevel = 'Medium';
 
-  const description = threats.length ? threats.join('; ') : 'No threat found';
-
   return {
     websiteUrl,
     threatLevel,
-    description,
+    description: threats.length ? threats.join('; ') : 'No threat found',
     score,
     flags: threats,
     timestamp: new Date(),
