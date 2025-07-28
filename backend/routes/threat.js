@@ -7,10 +7,10 @@ const pool = require('../db');
 // POST /api/threat/analyze
 router.post('/analyze', async (req, res) => {
     console.log('Received body:', req.body);
-    console.log('Analyzed result:', result);
+    
   const { websiteUrl } = req.body;
   const result = await analyzeThreat(websiteUrl);
-
+  console.log('Analyzed result:', result);
   try {
     await pool.query(
       `INSERT INTO threat_logs 
