@@ -10,7 +10,9 @@ router.post('/analyze', async (req, res) => {
     
   const { websiteUrl } = req.body;
   const result = await analyzeThreat(websiteUrl);
+
   console.log('Analyzed result:', result);
+
   try {
     await pool.query(
       `INSERT INTO threat_logs 

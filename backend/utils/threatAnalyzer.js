@@ -65,6 +65,7 @@ async function analyzeThreat(websiteUrl) {
     });
 
     const stats = vtRes.data.data.attributes.last_analysis_stats;
+    console.log("VirusTotal stats:", stats); // 👈 line to troubleshoot
     if (stats.malicious > 0) {
       threats.push(`VirusTotal: flagged by ${stats.malicious} engines`);
       score += stats.malicious * 10;
