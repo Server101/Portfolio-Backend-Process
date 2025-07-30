@@ -12,7 +12,6 @@ router.post('/analyze', async (req, res) => {
   const result = await analyzeThreat(websiteUrl);
 
   console.log('Analyzed result:', result);
-  console.log('Final Threat Result:', result);
 
   try {
     await pool.query(
