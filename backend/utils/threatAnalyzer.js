@@ -5,6 +5,9 @@ const axios = require('axios');
 const ABUSEIPDB_KEY = process.env.ABUSEIPDB_KEY;
 const VIRUSTOTAL_KEY = process.env.VIRUSTOTAL_KEY;
 
+console.log('[DEBUG] VirusTotal Key Loaded:', !!VIRUSTOTAL_KEY);
+console.log('[DEBUG] AbuseIPDB Key Loaded:', !!ABUSEIPDB_KEY);
+
 async function analyzeThreat(websiteUrl) {
   const threats = [];
   let score = 0;
