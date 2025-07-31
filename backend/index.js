@@ -1,7 +1,4 @@
  require('dotenv').config();
- const wordcloudRoute = require('./routes/wordcloud');
-app.use('/api/wordcloud', wordcloudRoute);
-
 const express = require('express'); 
 const cors = require('cors');
 const app = express();
