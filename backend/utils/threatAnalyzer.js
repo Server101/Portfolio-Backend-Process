@@ -87,7 +87,7 @@ async function analyzeThreat(websiteUrl) {
     threatLevel,
     description: threats.length ? threats.join('; ') : 'No threat found',
     score,
-    flags: threats,
+    flags: Array.isArray(threats) ? threats : [],
     timestamp: new Date(),
   };
 }

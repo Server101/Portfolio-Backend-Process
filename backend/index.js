@@ -1,9 +1,11 @@
  require('dotenv').config();
+ const wordcloudRoute = require('./routes/wordcloud');
+app.use('/api/wordcloud', wordcloudRoute);
+
 const express = require('express'); 
 const cors = require('cors');
 const app = express();
 const PORT = 3001;
-
 
 
 // ✅ Middleware (must come before route handlers)
