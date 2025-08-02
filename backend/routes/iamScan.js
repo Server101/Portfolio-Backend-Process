@@ -21,9 +21,7 @@ router.get('/scan', async (req, res) => {
 
         let decodedPolicy;
         try {
-          const encodedPolicy = decodeURIComponent(
-            JSON.stringify(role.AssumeRolePolicyDocument)
-          );
+          let decodedPolicy = role.AssumeRolePolicyDocument;
           decodedPolicy = JSON.parse(encodedPolicy); // true JS object
           console.log(`✅ Decoded policy for ${role.RoleName}:`, JSON.stringify(decodedPolicy, null, 2));
         } catch (err) {
