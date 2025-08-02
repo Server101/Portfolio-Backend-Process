@@ -4,6 +4,9 @@ const cors = require('cors');
 const app = express();
 const PORT = 3001;
 
+const iamLogRoutes = require('./routes/iamLogs');
+app.use('/api/iam', iamLogRoutes)
+
 // ✅ Middleware first
 app.use(cors());
 app.use(express.json());
