@@ -12,4 +12,18 @@ router.get('/logs', async (req, res) => {
   }
 });
 
+// Inside routes/iamLogs.js
+router.get('/logs', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM iam_scans ORDER BY created_at DESC LIMIT 50'
+    );
+    res.json({ success: true, logs: result.rows });
+  } catch (error) {
+    console.error('Error fetching IAM scan logs:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch logs' });
+  }
+});
+
+
 module.exports = router;
