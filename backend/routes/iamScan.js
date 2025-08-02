@@ -3,7 +3,7 @@ const express = require('express');
 const AWS = require('aws-sdk');
 const axios = require('axios');
 const router = express.Router();
-
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAybR6hl16-KY9UTgpYgqywXCnBQGOh7lohere';
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 router.get('/scan', async (req, res) => {
