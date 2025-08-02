@@ -1,4 +1,3 @@
-// routes/iamScan.js
 const express = require('express');
 const AWS = require('aws-sdk');
 const axios = require('axios');
@@ -9,13 +8,21 @@ const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 router.get('/scan', async (req, res) => {
   try {
-    const rolesData = await iam.listRoles({ MaxItems: 5 }).promise();
+    const rolesData = await iam.listRoles({ MaxItems: 50 }).promise();
     const roles = rolesData.Roles;
 
     const analyzedRoles = await Promise.all(
       roles.map(async (role) => {
-        const decodedPolicy = decodeURIComponent(role.AssumeRolePolicyDocument);
+        if (!role.AssumeRolePolicyDocument) {
+          console.warn(`Role ${role.RoleName} missing AssumeRolePolicyDocument`);
+          return null;
+        }
 
+        // ✅ Decode the trust policy
+        const decodedPolicy = decodeURIComponent(role.AssumeRolePolicyDocument);
+        console.log(`Decoded policy for ${role.RoleName}:`, decodedPolicy);
+
+        // 🧠 Gemini prompt
         const prompt = `
 You are a cloud security assistant. Analyze the following IAM trust policy for security risks.
 Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.
@@ -50,7 +57,7 @@ ${decodedPolicy}
           console.error('Gemini API error:', geminiErr.response?.data || geminiErr.message);
         }
 
-        // 🧠 Score logic based on keyword risk indicators
+        // 📊 Simple scoring based on keywords
         let score = 50;
         const lowerText = geminiReply.toLowerCase();
         if (lowerText.includes('critical') || lowerText.includes('high risk')) score = 95;
@@ -58,7 +65,7 @@ ${decodedPolicy}
         else if (lowerText.includes('least privilege') || lowerText.includes('audit')) score = 65;
         else if (lowerText.includes('no risk')) score = 20;
 
-        // 💾 Insert into PostgreSQL
+        // 💾 Save to PostgreSQL
         try {
           await pool.query(
             `INSERT INTO iam_scans (role_name, arn, policy, analysis, score)
@@ -69,7 +76,6 @@ ${decodedPolicy}
           console.error(`DB Insert error for role ${role.RoleName}:`, dbErr.message);
         }
 
-        // 🔔 Optional: console alert for high risk
         if (score >= 90) {
           console.warn(`⚠️ HIGH RISK: ${role.RoleName} scored ${score}`);
         }
@@ -84,7 +90,9 @@ ${decodedPolicy}
       })
     );
 
-    res.json({ success: true, results: analyzedRoles });
+    // ✅ Filter out any null results (e.g., skipped roles)
+    const validResults = analyzedRoles.filter(Boolean);
+    res.json({ success: true, results: validResults });
   } catch (err) {
     console.error('IAM scan error:', err);
     res.status(500).json({ success: false, error: err.message });
