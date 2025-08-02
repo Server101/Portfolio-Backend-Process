@@ -1,8 +1,9 @@
+// routes/iamScan.js
 const express = require('express');
 const AWS = require('aws-sdk');
 const axios = require('axios');
 const router = express.Router();
-const pool = require('../db'); // PostgreSQL connection
+const pool = require('../db');
 
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
@@ -11,18 +12,24 @@ router.get('/scan', async (req, res) => {
     const rolesData = await iam.listRoles({ MaxItems: 50 }).promise();
     const roles = rolesData.Roles;
 
-    const analyzedRoles = await Promise.all(
+    const analyzedRolesRaw = await Promise.all(
       roles.map(async (role) => {
         if (!role.AssumeRolePolicyDocument) {
-          console.warn(`Role ${role.RoleName} missing AssumeRolePolicyDocument`);
+          console.warn(`⚠️ Skipped ${role.RoleName} — no AssumeRolePolicyDocument`);
           return null;
         }
 
-        // ✅ Decode the trust policy
-        const decodedPolicy = decodeURIComponent(role.AssumeRolePolicyDocument);
-        console.log(`Decoded policy for ${role.RoleName}:`, decodedPolicy);
+        let decodedPolicy;
+        try {
+          decodedPolicy = decodeURIComponent(
+            JSON.stringify(role.AssumeRolePolicyDocument)
+          );
+          console.log(`✅ Decoded policy for ${role.RoleName}:`, decodedPolicy);
+        } catch (err) {
+          console.error(`❌ Failed to decode policy for ${role.RoleName}:`, err.message);
+          return null;
+        }
 
-        // 🧠 Gemini prompt
         const prompt = `
 You are a cloud security assistant. Analyze the following IAM trust policy for security risks.
 Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.
@@ -43,21 +50,17 @@ ${decodedPolicy}
                 }
               ]
             },
-            {
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            }
+            { headers: { 'Content-Type': 'application/json' } }
           );
 
           geminiReply =
             geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
             'No analysis provided by Gemini.';
         } catch (geminiErr) {
-          console.error('Gemini API error:', geminiErr.response?.data || geminiErr.message);
+          console.error('❌ Gemini API error:', geminiErr.response?.data || geminiErr.message);
         }
 
-        // 📊 Simple scoring based on keywords
+        // Risk scoring
         let score = 50;
         const lowerText = geminiReply.toLowerCase();
         if (lowerText.includes('critical') || lowerText.includes('high risk')) score = 95;
@@ -65,7 +68,6 @@ ${decodedPolicy}
         else if (lowerText.includes('least privilege') || lowerText.includes('audit')) score = 65;
         else if (lowerText.includes('no risk')) score = 20;
 
-        // 💾 Save to PostgreSQL
         try {
           await pool.query(
             `INSERT INTO iam_scans (role_name, arn, policy, analysis, score)
@@ -73,12 +75,10 @@ ${decodedPolicy}
             [role.RoleName, role.Arn, decodedPolicy, geminiReply, score]
           );
         } catch (dbErr) {
-          console.error(`DB Insert error for role ${role.RoleName}:`, dbErr.message);
+          console.error(`❌ DB Insert error for ${role.RoleName}:`, dbErr.message);
         }
 
-        if (score >= 90) {
-          console.warn(`⚠️ HIGH RISK: ${role.RoleName} scored ${score}`);
-        }
+        console.log(`⚠️ ${role.RoleName} scored ${score}`);
 
         return {
           roleName: role.RoleName,
@@ -90,11 +90,11 @@ ${decodedPolicy}
       })
     );
 
-    // ✅ Filter out any null results (e.g., skipped roles)
-    const validResults = analyzedRoles.filter(Boolean);
+    const validResults = analyzedRolesRaw.filter(Boolean);
+    console.log(`✅ Returning ${validResults.length} analyzed roles`);
     res.json({ success: true, results: validResults });
   } catch (err) {
-    console.error('IAM scan error:', err);
+    console.error('❌ IAM scan route error:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
