@@ -6,6 +6,9 @@ const router = express.Router();
 
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAybR6hl16-KY9UTgpYgqywXCnBQGOh7lohere';
+
+
 router.get('/scan', async (req, res) => {
   try {
     const rolesData = await iam.listRoles({ MaxItems: 5 }).promise();
@@ -29,7 +32,8 @@ ${decodedPolicy}
 let geminiReply = 'No analysis returned.';
 try {
   const geminiRes = await axios.post(
-    `https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    
     {
       contents: [
         {
