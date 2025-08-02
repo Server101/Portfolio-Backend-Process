@@ -13,48 +13,59 @@ router.get('/scan', async (req, res) => {
 
     const analyzedRoles = await Promise.all(
       roles.map(async (role) => {
+        // Decode AssumeRolePolicyDocument from URI format
         const decodedPolicy = decodeURIComponent(role.AssumeRolePolicyDocument);
+
+        // Build Gemini prompt
         const prompt = `
-You are a cloud security assistant. Analyze the following IAM trust policy for security risks. 
+You are a cloud security assistant. Analyze the following IAM trust policy for security risks.
 Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.
 
 Policy:
 ${decodedPolicy}
         `.trim();
 
-        // Send to Gemini
-        const geminiRes = await axios.post(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
-          {
-            contents: [
-              {
-                parts: [{ text: prompt }],
-                role: 'user'
+        // Send to Gemini API
+        let geminiReply = 'No analysis returned.';
+        try {
+          const geminiRes = await axios.post(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+            {
+              contents: [
+                {
+                  role: 'user',
+                  parts: [{ text: prompt }]
+                }
+              ]
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': process.env.GEMINI_API_KEY
               }
-            ]
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': process.env.GEMINI_API_KEY,
             }
-          }
-        );
+          );
 
-        const geminiReply = geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
+          geminiReply =
+            geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+            'No analysis provided by Gemini.';
+        } catch (geminiErr) {
+          console.error('Gemini API error:', geminiErr.message);
+        }
 
         return {
           roleName: role.RoleName,
           arn: role.Arn,
           policy: decodedPolicy,
-          analysis: geminiReply,
+          analysis: geminiReply
         };
       })
     );
 
+    // ✅ Return analyzed results, not just raw roles
     res.json({ success: true, results: analyzedRoles });
   } catch (err) {
-    console.error('Scan error:', err);
+    console.error('IAM scan error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
