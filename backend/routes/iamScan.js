@@ -6,8 +6,6 @@ const router = express.Router();
 
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyAybR6hl16-KY9UTgpYgqywXCnBQGOh7lohere';
-
 
 router.get('/scan', async (req, res) => {
   try {
