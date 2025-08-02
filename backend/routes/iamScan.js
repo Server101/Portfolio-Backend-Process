@@ -7,99 +7,112 @@ const pool = require('../db');
 
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
+// Decode base64-encoded AssumeRolePolicyDocument if needed
+const decodePolicy = (policy) => {
+  try {
+    if (typeof policy === 'string') {
+      return JSON.parse(decodeURIComponent(policy));
+    } else if (typeof policy === 'object') {
+      return policy;
+    } else {
+      return null;
+    }
+  } catch (err) {
+    console.error("❌ Failed to decode policy:", err.message);
+    return null;
+  }
+};
+
+// Dummy Gemini prompt simulation
+const analyzePolicy = async (policy) => {
+  try {
+    const prompt = `
+You are a cloud security assistant. Analyze the following IAM trust policy for security risks.
+Policy:
+${JSON.stringify(policy, null, 2)}
+`;
+
+    const response = await axios.post(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+      { contents: [{ parts: [{ text: prompt }] }] },
+      { params: { key: process.env.GEMINI_API_KEY } }
+    );
+
+    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis returned.";
+    return text;
+  } catch (err) {
+    console.error("❌ Gemini analysis failed:", err.message);
+    return "Failed to analyze policy.";
+  }
+};
+
 router.get('/scan', async (req, res) => {
   try {
     const rolesData = await iam.listRoles({ MaxItems: 50 }).promise();
     const roles = rolesData.Roles;
 
-    const analyzedRoles = await Promise.all(
-      roles.map(async (role) => {
-        const policy = role.AssumeRolePolicyDocument;
-        if (!policy) {
-          console.warn(`⚠️ Skipped ${role.RoleName} — no AssumeRolePolicyDocument`);
-          return null;
-        }
+    console.log("Found roles:", roles.map((r) => r.RoleName));
 
-        let decodedPolicy;
-        try {
-          // DO NOT decode or parse – use directly
-          decodedPolicy = policy;
-          console.log(`✅ Loaded policy for ${role.RoleName}`);
-        } catch (err) {
-          console.error(`❌ Failed to load policy for ${role.RoleName}:`, err.message);
-          return null;
-        }
+    const results = [];
 
-        const prompt = `
-You are a cloud security assistant. Analyze the following IAM trust policy for security risks.
-Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.
+    for (const role of roles) {
+      const encoded = role.AssumeRolePolicyDocument;
+      if (!encoded) {
+        console.warn(`⚠️ Role ${role.RoleName} missing AssumeRolePolicyDocument`);
+        continue;
+      }
 
-Policy:
-${JSON.stringify(decodedPolicy, null, 2)}
-        `.trim();
+      const decodedPolicy = decodePolicy(encoded);
+      if (!decodedPolicy) {
+        console.error(`❌ Failed to decode policy for ${role.RoleName}`);
+        continue;
+      }
 
-        let geminiReply = 'No analysis returned.';
-        try {
-          const geminiRes = await axios.post(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ text: prompt }]
-                }
-              ]
-            },
-            { headers: { 'Content-Type': 'application/json' } }
-          );
+      const analysis = await analyzePolicy(decodedPolicy);
 
-          geminiReply =
-            geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            'No analysis provided by Gemini.';
-        } catch (geminiErr) {
-          console.error('❌ Gemini API error:', geminiErr.response?.data || geminiErr.message);
-        }
+      const score = analysis.includes("wildcard") || analysis.includes("public") ? 90 :
+                    analysis.includes("recommendation") ? 70 : 30;
 
-        // Risk scoring
-        let score = 50;
-        const lowerText = geminiReply.toLowerCase();
-        if (lowerText.includes('critical') || lowerText.includes('high risk')) score = 95;
-        else if (lowerText.includes('mfa') || lowerText.includes('wildcard')) score = 80;
-        else if (lowerText.includes('least privilege') || lowerText.includes('audit')) score = 65;
-        else if (lowerText.includes('no risk') || lowerText.includes('secure')) score = 20;
+      try {
+        await pool.query(
+          'INSERT INTO iam_scans (role_name, role_arn, policy, analysis, score) VALUES ($1, $2, $3, $4, $5)',
+          [
+            role.RoleName,
+            role.Arn,
+            JSON.stringify(decodedPolicy), // ✅ Fixed
+            analysis,
+            score,
+          ]
+        );
+        results.push({
+          role_name: role.RoleName,
+          role_arn: role.Arn,
+          score,
+          analysis,
+          policy: decodedPolicy,
+        });
+        console.log(`✅ Inserted ${role.RoleName}`);
+      } catch (err) {
+        console.error(`❌ DB Insert error for ${role.RoleName}: ${err.message}`);
+      }
+    }
 
-        try {
-          const result = await pool.query(
-            `INSERT INTO iam_scans (role_name, arn, policy, analysis, score)
-             VALUES ($1, $2, $3, $4, $5)
-             RETURNING id, role_name, arn, policy, analysis, score, created_at`,
-            [role.RoleName, role.Arn, decodedPolicy, geminiReply, score]
-          );
-
-          const row = result.rows[0];
-          console.log(`✅ Inserted analysis for ${role.RoleName} | Score: ${score}`);
-          return {
-            id: row.id,
-            roleName: row.role_name,
-            arn: row.arn,
-            policy: row.policy,
-            analysis: row.analysis,
-            score: row.score,
-            createdAt: row.created_at
-          };
-        } catch (dbErr) {
-          console.error(`❌ DB Insert error for ${role.RoleName}:`, dbErr.message);
-          return null;
-        }
-      })
-    );
-
-    const validResults = analyzedRoles.filter(Boolean);
-    console.log(`✅ Returning ${validResults.length} analyzed roles`);
-    res.json({ success: true, results: validResults });
+    return res.json({ success: true, results });
   } catch (err) {
-    console.error('❌ IAM scan route error:', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error("❌ IAM scan failed:", err.message);
+    return res.status(500).json({ success: false, error: "IAM scan failed." });
+  }
+});
+
+router.get('/logs', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, role_name, role_arn, policy, analysis, score, created_at FROM iam_scans ORDER BY created_at DESC LIMIT 50'
+    );
+    return res.json({ logs: rows });
+  } catch (err) {
+    console.error("❌ Failed to load IAM logs:", err.message);
+    return res.status(500).json({ error: "Failed to load logs" });
   }
 });
 
