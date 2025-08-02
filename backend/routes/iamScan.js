@@ -29,22 +29,20 @@ ${decodedPolicy}
         let geminiReply = 'No analysis returned.';
         try {
           const geminiRes = await axios.post(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
-            {
-              contents: [
-                {
-                  role: 'user',
-                  parts: [{ text: prompt }]
-                }
-              ]
-            },
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': process.env.GEMINI_API_KEY
-              }
-            }
-          );
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+  {
+    contents: [
+      {
+        parts: [{ text: prompt }],
+      },
+    ],
+  },
+  {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  }
+);
 
           geminiReply =
             geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ||
