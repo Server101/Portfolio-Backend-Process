@@ -14,18 +14,19 @@ router.get('/scan', async (req, res) => {
 
     const analyzedRoles = await Promise.all(
       roles.map(async (role) => {
-        if (!role.AssumeRolePolicyDocument) {
+        const policy = role.AssumeRolePolicyDocument;
+        if (!policy) {
           console.warn(`⚠️ Skipped ${role.RoleName} — no AssumeRolePolicyDocument`);
           return null;
         }
 
         let decodedPolicy;
         try {
-          let decodedPolicy = role.AssumeRolePolicyDocument;
-          decodedPolicy = JSON.parse(encodedPolicy); // true JS object
-          console.log(`✅ Decoded policy for ${role.RoleName}:`, JSON.stringify(decodedPolicy, null, 2));
+          // DO NOT decode or parse – use directly
+          decodedPolicy = policy;
+          console.log(`✅ Loaded policy for ${role.RoleName}`);
         } catch (err) {
-          console.error(`❌ Failed to decode policy for ${role.RoleName}:`, err.message);
+          console.error(`❌ Failed to load policy for ${role.RoleName}:`, err.message);
           return null;
         }
 
@@ -59,13 +60,13 @@ ${JSON.stringify(decodedPolicy, null, 2)}
           console.error('❌ Gemini API error:', geminiErr.response?.data || geminiErr.message);
         }
 
-        // Risk scoring logic
+        // Risk scoring
         let score = 50;
         const lowerText = geminiReply.toLowerCase();
         if (lowerText.includes('critical') || lowerText.includes('high risk')) score = 95;
         else if (lowerText.includes('mfa') || lowerText.includes('wildcard')) score = 80;
         else if (lowerText.includes('least privilege') || lowerText.includes('audit')) score = 65;
-        else if (lowerText.includes('no risk')) score = 20;
+        else if (lowerText.includes('no risk') || lowerText.includes('secure')) score = 20;
 
         try {
           const result = await pool.query(
@@ -76,8 +77,7 @@ ${JSON.stringify(decodedPolicy, null, 2)}
           );
 
           const row = result.rows[0];
-          console.log(`⚠️ ${role.RoleName} scored ${score}`);
-
+          console.log(`✅ Inserted analysis for ${role.RoleName} | Score: ${score}`);
           return {
             id: row.id,
             roleName: row.role_name,
