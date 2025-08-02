@@ -25,31 +25,33 @@ Policy:
 ${decodedPolicy}
         `.trim();
 
-        // Send to Gemini API
-        let geminiReply = 'No analysis returned.';
-        try {
-          const geminiRes = await axios.post(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
-  {
-    contents: [
-      {
-        parts: [{ text: prompt }],
-      },
-    ],
-  },
-  {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  }
-);
-
-          geminiReply =
-            geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text ||
-            'No analysis provided by Gemini.';
-        } catch (geminiErr) {
-          console.error('Gemini API error:', geminiErr.message);
+       // Send to Gemini API
+let geminiReply = 'No analysis returned.';
+try {
+  const geminiRes = await axios.post(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }]
         }
+      ]
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+
+  geminiReply =
+    geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+    'No analysis provided by Gemini.';
+} catch (geminiErr) {
+  console.error('Gemini API error:', geminiErr.response?.data || geminiErr.message);
+}
+
 
         return {
           roleName: role.RoleName,
