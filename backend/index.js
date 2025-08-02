@@ -4,8 +4,15 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const PORT = 3001;
+const iamScanRoute = require('./routes/iamScan');
+
+const iamRoutes = require('./routes/iam');
 
 
+app.use('/api/iam', iamRoutes);
+
+
+app.use('/api/iam', iamScanRoute);
 // ✅ Middleware (must come before route handlers)
 app.use(cors());
 app.use(express.json());
