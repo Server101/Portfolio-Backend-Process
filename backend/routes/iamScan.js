@@ -9,7 +9,7 @@ const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 router.get('/scan', async (req, res) => {
   try {
-    const rolesData = await iam.listRoles({ MaxItems: 5 }).promise();
+    const rolesData = await iam.listRoles({ MaxItems: 50 }).promise();
     const roles = rolesData.Roles;
 
     const analyzedRoles = await Promise.all(
