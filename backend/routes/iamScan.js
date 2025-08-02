@@ -3,7 +3,6 @@ const express = require('express');
 const AWS = require('aws-sdk');
 const axios = require('axios');
 const router = express.Router();
-
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 
@@ -30,8 +29,9 @@ ${decodedPolicy}
 let geminiReply = 'No analysis returned.';
 try {
   const geminiRes = await axios.post(
+
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    
+
     {
       contents: [
         {
