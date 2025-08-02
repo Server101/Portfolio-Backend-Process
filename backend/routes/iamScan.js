@@ -1,3 +1,4 @@
+// routes/iamScan.js
 const express = require('express');
 const AWS = require('aws-sdk');
 const axios = require('axios');
@@ -20,21 +21,21 @@ router.get('/scan', async (req, res) => {
 
         let decodedPolicy;
         try {
-          decodedPolicy = decodeURIComponent(
-            JSON.stringify(role.AssumeRolePolicyDocument)
-          );
-          console.log(`✅ Decoded policy for ${role.RoleName}:`, decodedPolicy);
+          const encodedPolicy = decodeURIComponent(role.AssumeRolePolicyDocument);
+          decodedPolicy = JSON.parse(encodedPolicy);
+          console.log(`✅ Decoded policy for ${role.RoleName}:`, JSON.stringify(decodedPolicy, null, 2));
         } catch (err) {
           console.error(`❌ Failed to decode policy for ${role.RoleName}:`, err.message);
           return null;
         }
 
+        // FIXED: stringify the JSON for Gemini prompt
         const prompt = `
 You are a cloud security assistant. Analyze the following IAM trust policy for security risks.
 Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.
 
 Policy:
-${decodedPolicy}
+${JSON.stringify(decodedPolicy, null, 2)}
         `.trim();
 
         let geminiReply = 'No analysis returned.';
@@ -59,7 +60,7 @@ ${decodedPolicy}
           console.error('❌ Gemini API error:', geminiErr.response?.data || geminiErr.message);
         }
 
-        // Risk scoring
+        // Simple risk scoring
         let score = 50;
         const lowerText = geminiReply.toLowerCase();
         if (lowerText.includes('critical') || lowerText.includes('high risk')) score = 95;
