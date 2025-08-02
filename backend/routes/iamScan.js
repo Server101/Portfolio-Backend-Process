@@ -1,76 +1,62 @@
-// backend/routes/iamScan.js
+// routes/iamScan.js
 const express = require('express');
-const router = express.Router();
-const { IAM } = require('aws-sdk');
+const AWS = require('aws-sdk');
 const axios = require('axios');
-require('dotenv').config();
+const router = express.Router();
 
-// AWS SDK Configuration (uses env vars like AWS_ACCESS_KEY_ID, etc.)
-const iam = new IAM();
+const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 router.get('/scan', async (req, res) => {
   try {
-    const policiesRes = await iam.listPolicies({ Scope: 'Local' }).promise();
-    const rolesRes = await iam.listRoles().promise();
+    const rolesData = await iam.listRoles({ MaxItems: 5 }).promise();
+    const roles = rolesData.Roles;
 
-    const results = [];
+    const analyzedRoles = await Promise.all(
+      roles.map(async (role) => {
+        const decodedPolicy = decodeURIComponent(role.AssumeRolePolicyDocument);
+        const prompt = `
+You are a cloud security assistant. Analyze the following IAM trust policy for security risks. 
+Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.
 
-    // Iterate over policies and analyze each with Gemini
-    for (const policy of policiesRes.Policies.slice(0, 5)) {
-      const policyDetail = await iam.getPolicyVersion({
-        PolicyArn: policy.Arn,
-        VersionId: policy.DefaultVersionId,
-      }).promise();
+Policy:
+${decodedPolicy}
+        `.trim();
 
-      const document = decodeURIComponent(policyDetail.PolicyVersion.Document);
+        // Send to Gemini
+        const geminiRes = await axios.post(
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+          {
+            contents: [
+              {
+                parts: [{ text: prompt }],
+                role: 'user'
+              }
+            ]
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': process.env.GEMINI_API_KEY,
+            }
+          }
+        );
 
-      const geminiResponse = await queryGeminiAPI(document);
-      results.push({
-        name: policy.PolicyName,
-        type: 'Policy',
-        analysis: geminiResponse,
-      });
-    }
+        const geminiReply = geminiRes.data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
 
-    // Iterate over roles and analyze trust policy
-    for (const role of rolesRes.Roles.slice(0, 5)) {
-      const trustPolicy = role.AssumeRolePolicyDocument;
-      const geminiResponse = await queryGeminiAPI(trustPolicy);
-      results.push({
-        name: role.RoleName,
-        type: 'Role',
-        analysis: geminiResponse,
-      });
-    }
-
-    res.json(results);
-  } catch (error) {
-    console.error('IAM scan error:', error);
-    res.status(500).json({ error: 'Failed to scan IAM policies/roles.' });
-  }
-});
-
-// Gemini Query Helper
-async function queryGeminiAPI(policyDocument) {
-  const prompt = `You are a cloud security assistant. Analyze the following IAM policy for security risks. Flag overly broad permissions, wildcard actions, missing MFA, publicly accessible resources, and any other misconfigurations.\n\nPolicy:\n${JSON.stringify(policyDocument, null, 2)}`;
-
-  try {
-    const response = await axios.post(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-      },
-      {
-        params: { key: process.env.GEMINI_API_KEY },
-        headers: { 'Content-Type': 'application/json' },
-      }
+        return {
+          roleName: role.RoleName,
+          arn: role.Arn,
+          policy: decodedPolicy,
+          analysis: geminiReply,
+        };
+      })
     );
 
-    return response.data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
+    res.json({ success: true, results: analyzedRoles });
   } catch (err) {
-    console.error('Gemini API error:', err.message);
-    return 'Error querying Gemini API.';
+    console.error('Scan error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
-}
+});
 
 module.exports = router;
