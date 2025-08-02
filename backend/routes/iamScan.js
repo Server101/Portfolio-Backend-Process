@@ -1,4 +1,3 @@
-// routes/iamScan.js
 const express = require('express');
 const AWS = require('aws-sdk');
 const axios = require('axios');
@@ -12,7 +11,7 @@ router.get('/scan', async (req, res) => {
     const rolesData = await iam.listRoles({ MaxItems: 50 }).promise();
     const roles = rolesData.Roles;
 
-    const analyzedRolesRaw = await Promise.all(
+    const analyzedRoles = await Promise.all(
       roles.map(async (role) => {
         if (!role.AssumeRolePolicyDocument) {
           console.warn(`⚠️ Skipped ${role.RoleName} — no AssumeRolePolicyDocument`);
@@ -69,28 +68,33 @@ ${decodedPolicy}
         else if (lowerText.includes('no risk')) score = 20;
 
         try {
-          await pool.query(
+          const result = await pool.query(
             `INSERT INTO iam_scans (role_name, arn, policy, analysis, score)
-             VALUES ($1, $2, $3, $4, $5)`,
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, role_name, arn, policy, analysis, score, created_at`,
             [role.RoleName, role.Arn, decodedPolicy, geminiReply, score]
           );
+
+          const row = result.rows[0];
+          console.log(`⚠️ ${role.RoleName} scored ${score}`);
+
+          return {
+            id: row.id,
+            roleName: row.role_name,
+            arn: row.arn,
+            policy: row.policy,
+            analysis: row.analysis,
+            score: row.score,
+            createdAt: row.created_at
+          };
         } catch (dbErr) {
           console.error(`❌ DB Insert error for ${role.RoleName}:`, dbErr.message);
+          return null;
         }
-
-        console.log(`⚠️ ${role.RoleName} scored ${score}`);
-
-        return {
-          roleName: role.RoleName,
-          arn: role.Arn,
-          policy: decodedPolicy,
-          analysis: geminiReply,
-          score
-        };
       })
     );
 
-    const validResults = analyzedRolesRaw.filter(Boolean);
+    const validResults = analyzedRoles.filter(Boolean);
     console.log(`✅ Returning ${validResults.length} analyzed roles`);
     res.json({ success: true, results: validResults });
   } catch (err) {
