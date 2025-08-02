@@ -25,5 +25,14 @@ router.get('/logs', async (req, res) => {
   }
 });
 
+const AWS = require('aws-sdk');
+require('dotenv').config();
+
+const iam = new AWS.IAM({ region: process.env.AWS_REGION });
+
+iam.listRoles({ MaxItems: 10 }, (err, data) => {
+  if (err) return console.error('Error listing roles:', err);
+  console.log('Found roles:', data.Roles.map(r => r.RoleName));
+});
 
 module.exports = router;
