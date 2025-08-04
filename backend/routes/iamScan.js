@@ -5,6 +5,10 @@ const axios = require('axios');
 const router = express.Router();
 const pool = require('../db');
 
+
+console.log('[DEBUG] Gemini result before insert:', geminiResult);
+console.log('[DEBUG] JSON.stringify(geminiResult):', JSON.stringify(geminiResult));
+
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 router.get('/scan', async (req, res) => {
