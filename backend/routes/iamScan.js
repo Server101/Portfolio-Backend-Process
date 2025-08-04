@@ -5,10 +5,6 @@ const axios = require('axios');
 const router = express.Router();
 const pool = require('../db');
 
-
-console.log('[DEBUG] Gemini result before insert:', geminiResult);
-console.log('[DEBUG] JSON.stringify(geminiResult):', JSON.stringify(geminiResult));
-
 const iam = new AWS.IAM({ region: process.env.AWS_REGION });
 
 router.get('/scan', async (req, res) => {
@@ -26,8 +22,7 @@ router.get('/scan', async (req, res) => {
 
         let decodedPolicy;
         try {
-          // DO NOT decode or parse – use directly
-          decodedPolicy = policy;
+          decodedPolicy = policy; // Already decoded by AWS SDK
           console.log(`✅ Loaded policy for ${role.RoleName}`);
         } catch (err) {
           console.error(`❌ Failed to load policy for ${role.RoleName}:`, err.message);
@@ -73,11 +68,13 @@ ${JSON.stringify(decodedPolicy, null, 2)}
         else if (lowerText.includes('no risk') || lowerText.includes('secure')) score = 20;
 
         try {
+          const stringifiedPolicy = JSON.stringify(decodedPolicy); // ✅ Fix: stringify before insert
+
           const result = await pool.query(
             `INSERT INTO iam_scans (role_name, arn, policy, analysis, score)
              VALUES ($1, $2, $3, $4, $5)
              RETURNING id, role_name, arn, policy, analysis, score, created_at`,
-            [role.RoleName, role.Arn, decodedPolicy, geminiReply, score]
+            [role.RoleName, role.Arn, stringifiedPolicy, geminiReply, score]
           );
 
           const row = result.rows[0];
