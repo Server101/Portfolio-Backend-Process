@@ -4,7 +4,7 @@ const router = express.Router();
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 const ses = new SESClient({
-  region: process.env.AWS_REGION || process.env.SES_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || process.env.SES_REGION || 'us-east-2',
 });
 
 // simple body validation
