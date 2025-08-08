@@ -3,28 +3,29 @@ console.log("[DEBUG] Gemini API Key Loaded:", !!process.env.GEMINI_API_KEY);
 
 const express = require('express'); 
 const cors = require('cors');
+
 const app = express();
 const PORT = 3001;
 
-// Router to save and view logs
-const iamLogRoutes = require('./routes/iamLogs');
-app.use('/api/iam', iamLogRoutes)
-
-// ✅ Middleware first
+// ✅ Middleware should come BEFORE routes
 app.use(cors());
 app.use(express.json());
 
 // ✅ Routes
+const iamLogRoutes = require('./routes/iamLogs');
 const iamScanRoute = require('./routes/iamScan');
-// Remove this if you’re not using `routes/iam.js`
-// const iamRoutes = require('./routes/iam');
+const threatRoutes = require('./routes/threat');
 
-// Use only the correct IAM route
+// ⬇️ NEW: Contact route
+const contactRoutes = require('./routes/contact');
+
+// Mount
+app.use('/api/iam', iamLogRoutes);
 app.use('/api/iam', iamScanRoute);
-
-// ✅ Threat Monitoring Routes
-const threatRoutes = require('./routes/threat'); 
 app.use('/api/threat', threatRoutes);
+
+// ⬇️ Mount the contact route at /api/contact
+app.use('/api/contact', contactRoutes);
 
 // ✅ Root health check
 app.get('/', (req, res) => {
