@@ -1,37 +1,45 @@
-// backend/index.js
 require('dotenv').config();
 console.log("[DEBUG] Gemini API Key Loaded:", !!process.env.GEMINI_API_KEY);
 
-// Log email envs so we can see them in pm2 logs
-console.log("[DEBUG] Email env present:",
-  "REGION:", process.env.AWS_REGION,
-  "FROM:", process.env.SES_FROM,
-  "TO:", process.env.CONTACT_TO
-);
-
-const express = require('express');
+const express = require('express'); 
 const cors = require('cors');
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = 3001;
 
-// ✅ Middleware FIRST
+// Router to save and view logs
+const iamLogRoutes = require('./routes/iamLogs');
+app.use('/api/iam', iamLogRoutes)
+
+// ✅ Middleware first
 app.use(cors());
 app.use(express.json());
 
 // ✅ Routes
-const iamLogRoutes = require('./routes/iamLogs');
-app.use('/api/iam', iamLogRoutes);
-
 const iamScanRoute = require('./routes/iamScan');
+// Remove this if you’re not using `routes/iam.js`
+// const iamRoutes = require('./routes/iam');
+
+// Use only the correct IAM route
 app.use('/api/iam', iamScanRoute);
 
-// 👉 Contact route
-const contactRoute = require('./routes/contact');
-app.use('/api/contact', contactRoute);
+// ✅ Threat Monitoring Routes
+const threatRoutes = require('./routes/threat'); 
+app.use('/api/threat', threatRoutes);
 
-// ✅ Health check
-app.get('/', (_, res) => res.send('API is running ✅'));
+// ✅ Root health check
+app.get('/', (req, res) => {
+  res.send('API is running ✅');
+});
 
+// ✅ Example route (optional)
+app.get('/api/projects', (req, res) => {
+  res.json([
+    { id: 1, title: 'Full Stack Portfolio', tech: 'React + Node.js + EC2' },
+    { id: 2, title: 'API Service', tech: 'Express + PostgreSQL' }
+  ]);
+});
+
+// ✅ Start server
 app.listen(PORT, () => {
   console.log(`Backend running at http://localhost:${PORT}`);
 });
