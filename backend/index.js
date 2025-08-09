@@ -18,12 +18,14 @@ const iamLogRoutes  = require('./routes/iamLogs');
 const iamScanRoute  = require('./routes/iamScan');
 const threatRoutes  = require('./routes/threat');
 const contactRoutes = require('./routes/contact');
+const githubRoutes = require('./routes/github');
+
 
 app.use('/api/iam', iamLogRoutes);     // GET /api/iam/logs
 app.use('/api/iam', iamScanRoute);     // GET /api/iam/scan
 app.use('/api/threat', threatRoutes);  // GET /api/threat/logs, POST /api/threat/analyze
 app.use('/api/contact', contactRoutes);// POST /api/contact, GET /api/contact/logs
-
+app.use('/api/github', githubRoutes);
 // --- Health check
 app.get('/', (_req, res) => res.send('API is running ✅'));
 
