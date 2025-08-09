@@ -6,25 +6,29 @@ const cors = require('cors');
 const app = express();
 const PORT = 3001;
 
-// Router to save and view logs
-const iamLogRoutes = require('./routes/iamLogs');
-app.use('/api/iam', iamLogRoutes)
+
 
 // ✅ Middleware first
 app.use(cors());
 app.use(express.json());
 
-// ✅ Routes
+
+// Router to save and view logs
+// // ✅ Routes
+const iamLogRoutes = require('./routes/iamLogs');
+const threatRoutes = require('./routes/threat'); 
 const iamScanRoute = require('./routes/iamScan');
+const contactRoutes = require('./routes/contact');
+
 // Remove this if you’re not using `routes/iam.js`
 // const iamRoutes = require('./routes/iam');
 
-// Use only the correct IAM route
+app.use('/api/iam', iamLogRoutes)
+app.use('/api/contact', contactRoutes);
 app.use('/api/iam', iamScanRoute);
-
-// ✅ Threat Monitoring Routes
-const threatRoutes = require('./routes/threat'); 
 app.use('/api/threat', threatRoutes);
+
+
 
 // ✅ Root health check
 app.get('/', (req, res) => {
